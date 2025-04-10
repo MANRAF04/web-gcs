@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web GCS</title>
+    <style>
+        body { font-family: sans-serif; padding: 1em; }
+        #status, #telemetry { margin-top: 1em; padding: 0.5em; border: 1px solid #ccc; min-height: 50px; background-color: #f9f9f9;}
+        button { margin: 0.5em 0.5em 0.5em 0; padding: 0.5em 1em; }
+        pre { background-color: #eee; padding: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Web GCS Interface</h1>
+
+    <div>
+        <button id="connectButton">Connect to SITL</button>
+        <button id="disconnectButton" disabled>Disconnect</button>
+        <button id="statusButton" disabled>Get Status</button>
+        </div>
+
+    <div id="status">
+        <strong>Status:</strong> Not Connected
+    </div>
+
+    <div id="telemetry">
+        <strong>Telemetry:</strong>
+        <pre id="telemetryData">Waiting for connection...</pre>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

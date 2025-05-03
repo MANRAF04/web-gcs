@@ -24,7 +24,32 @@ function initMap() {
 
     // Initialize the map - Start zoomed out, will center on first drone location
     // Using coordinates near Volos, Greece as a fallback center if needed later
-    map = L.map('map').setView([39.36, 22.94], 5); // Start relatively zoomed out
+    map = L.map('map', {
+        contextmenu: true,
+        contextmenuWidth: 140,
+        contextmenuItems: [
+          {
+            text: 'Go to this point',
+            callback: function(e) {
+              const { lat, lng } = e.latlng;
+              sendGoToCommand(lat, lng);
+            }
+          },
+          {
+            text: 'Add waypoint',
+            callback: function(e) {
+              // Add waypoint logic
+            }
+          },
+          '-', // Separator
+          {
+            text: 'Center map here',
+            callback: function(e) {
+              map.panTo(e.latlng);
+            }
+          }
+        ]
+      }).setView([39.36, 22.94], 5); // Start relatively zoomed out
 
     // Add OpenStreetMap tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -33,6 +58,71 @@ function initMap() {
     }).addTo(map);
 
     console.log("Map initialized");
+}
+
+// Toast notification helper
+function showToast(message, type = 'info', duration = 3000) {
+    // Set color based on type
+    let background;
+    switch(type) {
+        case 'success': background = "#28a745"; break;
+        case 'error': background = "#dc3545"; duration = 5000; break; // Longer duration for errors
+        case 'warning': background = "#ffc107"; break;
+        default: background = "#007bff"; // info
+    }
+    
+    Toastify({
+        text: message,
+        duration: duration,
+        close: true,
+        gravity: "top",
+        position: "right",
+        style: {
+            background: background
+        }
+    }).showToast();
+}
+
+function sendGoToCommand(lat, lng) {
+    showToast("Sending go-to command...", "info");
+    
+    fetch(`${backendUrl}/api/goto`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ lat, lng, altitude: 10 })
+    })
+    .then(response => {
+        // Always try to parse the JSON first, even for error responses
+        return response.json().then(data => {
+            // If response is not ok, throw an error with the message from the server
+            if (!response.ok) {
+                throw new Error(data.message || `Server responded with status: ${response.status}`);
+            }
+            // If response is ok, return the data for the next .then()
+            return data;
+        });
+    })
+    .then(data => {
+        if (data.status === 'success') {
+            showToast("Vehicle moving to selected location", "success");
+            
+            // Add a marker at the target location
+            L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'goto-marker',
+                    html: '<i class="fas fa-crosshairs"></i>'
+                })
+            }).addTo(map);
+        } else {
+            showToast(`Command failed: ${data.message}`, "error");
+        }
+    })
+    .catch(error => {
+        console.error("Go-to fetch error:", error);
+        showToast(`Error: ${error.message}`, "error");
+    });
 }
 
 // --- UI Update Functions ---

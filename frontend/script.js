@@ -1,7 +1,8 @@
 const connectButton = document.getElementById('connectButton');
 const disconnectButton = document.getElementById('disconnectButton');
 const statusButton = document.getElementById('statusButton');
-const statusDiv = document.getElementById('status');
+const takeoffButton = document.getElementById('takeoffButton');
+// const statusDiv = document.getElementById('status');
 const telemetryDataPre = document.getElementById('telemetryData');
 
 const backendUrl = 'http://127.0.0.1:5000'; // Your Flask backend URL
@@ -41,7 +42,19 @@ function initMap() {
               // Add waypoint logic
             }
           },
+          {
+            text: 'Return to home',
+            callback: function(e) {
+              sendReturnToHome();
+            }
+          },
           '-', // Separator
+          {
+            text: 'Example Mission',
+            callback: function(e) {
+              sendExampleMission();
+            }
+          },
           {
             text: 'Center map here',
             callback: function(e) {
@@ -125,11 +138,111 @@ function sendGoToCommand(lat, lng) {
     });
 }
 
-// --- UI Update Functions ---
-function updateStatus(message, isError = false) {
-    statusDiv.innerHTML = `<strong>Status:</strong> ${message}`;
-    statusDiv.style.color = isError ? 'red' : 'black';
+function sendTakeOff() {
+    showToast("Sending takeoff command...", "info");
+    
+    fetch(`${backendUrl}/api/takeoff`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({altitude: 10})
+    })
+    .then(response => {
+        // Always try to parse the JSON first, even for error responses
+        return response.json().then(data => {
+            // If response is not ok, throw an error with the message from the server
+            if (!response.ok) {
+                throw new Error(data.message || `Server responded with status: ${response.status}`);
+            }
+            // If response is ok, return the data for the next .then()
+            return data;
+        });
+    })
+    .then(data => {
+        if (data.status === 'success') {
+            showToast("Taking off...", "success");
+        } else {
+            showToast(`Command failed: ${data.message}`, "error");
+        }
+    })
+    .catch(error => {
+        console.error("Takeoff fetch error:", error);
+        showToast(`Error: ${error.message}`, "error");
+    });
 }
+
+function sendReturnToHome() {
+    showToast("Sending return to home command...", "info");
+    fetch(`${backendUrl}/api/rtl`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+    }).then(response => {
+        // Always try to parse the JSON first, even for error responses
+        return response.json().then(data => {
+            // If response is not ok, throw an error with the message from the server
+            if (!response.ok) {
+                throw new Error(data.message || `Server responded with status: ${response.status}`);
+            }
+            // If response is ok, return the data for the next .then()
+            return data;
+        });
+    }
+    ).then(data => {
+        if (data.status === 'success') {
+            showToast("Returning to home...", "success");
+        } else {
+            showToast(`Command failed: ${data.message}`, "error");
+        }
+    }
+    ).catch(error => {
+        console.error("Return to home fetch error:", error);
+        showToast(`Error: ${error.message}`, "error");
+    }
+    );
+}
+
+function sendExampleMission() {
+    showToast("Sending example mission...", "info");
+    fetch(`${backendUrl}/api/example_mission`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+    }).then(response => {
+        // Always try to parse the JSON first, even for error responses
+        return response.json().then(data => {
+            // If response is not ok, throw an error with the message from the server
+            if (!response.ok) {
+                throw new Error(data.message || `Server responded with status: ${response.status}`);
+            }
+            // If response is ok, return the data for the next .then()
+            return data;
+        });
+    }
+    ).then(data => {
+        if (data.status === 'success') {
+            showToast("Mission started successfully", "success");
+        } else {
+            showToast(`Command failed: ${data.message}`, "error");
+        }
+    }
+    ).catch(error => {
+        console.error("Example mission fetch error:", error);
+        showToast(`Error: ${error.message}`, "error");
+    }
+    );
+}
+
+// --- UI Update Functions ---
+// function //updateStatus(message, isError = false) {
+//     statusDiv.innerHTML = `<strong>Status:</strong> ${message}`;
+//     statusDiv.style.color = isError ? 'red' : 'black';
+// }
 
 function updateTelemetry(data) {
     // Update Text Telemetry
@@ -202,9 +315,10 @@ function updateTelemetry(data) {
 
 function setUIConnected(connected) {
     isConnected = connected;
-    connectButton.disabled = connected;
-    disconnectButton.disabled = !connected;
+    // connectButton.disabled = connected;
+    // disconnectButton.disabled = !connected;
     statusButton.disabled = !connected;
+    takeoffButton.disabled = !connected;
     // Enable/disable other command buttons here later
 
     if (connected) {
@@ -216,13 +330,18 @@ function setUIConnected(connected) {
         }
         // ----> End: Clear previous flight path <----
 
-        updateStatus('Connected');
+        //updateStatus('Connected');
+        connectButton.hidden = true;
+        disconnectButton.hidden = false;
         fetchStatus(); // Fetch immediately
         if (!statusInterval) {
             statusInterval = setInterval(fetchStatus, 100); // Poll every 2 seconds
         }
     } else {
-        updateStatus('Disconnected');
+        connectButton.hidden = false;
+        disconnectButton.hidden = true;
+
+        //updateStatus('Disconnected');
         updateTelemetry(null); // Clear telemetry text
 
         // Stop polling
@@ -237,6 +356,13 @@ function setUIConnected(connected) {
             droneMarker = null;
             console.log("Drone marker removed.");
         }
+
+        // Remove all other L.Marker instances (e.g., go-to markers)
+        map.eachLayer(function (layer) {
+            if (layer instanceof L.Marker) {
+                map.removeLayer(layer);
+            }
+        });
         initialCenterSet = false; // Reset centering flag
 
         // ----> Start: Clear flight path on disconnect <----
@@ -257,7 +383,7 @@ function setUIConnected(connected) {
 
 // --- API Call Functions ---
 async function connectToDrone() {
-    updateStatus('Attempting connection...');
+    //updateStatus('Attempting connection...');
     try {
         const response = await fetch(`${backendUrl}/api/connect`, { method: 'POST' });
         const data = await response.json();
@@ -265,37 +391,35 @@ async function connectToDrone() {
         if (response.ok && data.status === 'success') {
             setUIConnected(true);
         } else {
-            updateStatus(`Connection Failed: ${data.message}`, true);
+            //updateStatus(`Connection Failed: ${data.message}`, true);
             setUIConnected(false);
         }
     } catch (error) {
         console.error('Connection Error:', error);
-        updateStatus(`Connection Error: ${error.message}`, true);
+        //updateStatus(`Connection Error: ${error.message}`, true);
         setUIConnected(false);
     }
 }
 
-async function disconnectFromDrone() {
-    updateStatus('Disconnecting...');
-    try {
-        const response = await fetch(`${backendUrl}/api/disconnect`, { method: 'POST' });
-        const data = await response.json();
-
-        if (response.ok && data.status === 'success') {
-            setUIConnected(false); // Let setUIConnected handle UI and map cleanup
-        } else {
-            updateStatus(`Disconnect Attempt Message: ${data.message}`, true);
-             setUIConnected(false); // Assume disconnected anyway for UI consistency
-        }
-    } catch (error) {
-        console.error('Disconnect Error:', error);
-        updateStatus(`Disconnect Error: ${error.message}`, true);
-        setUIConnected(false); // Assume disconnected on error
-    }
+function disconnectFromDrone() {
+    //updateStatus('Disconnecting...');
+    fetch(`${backendUrl}/api/disconnect`, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                setUIConnected(false);
+            } else {
+                //updateStatus(`Disconnection Failed: ${data.message}`, true);
+            }
+        })
+        .catch(error => {
+            console.error('Disconnection Error:', error);
+            //updateStatus(`Disconnection Error: ${error.message}`, true);
+        });
 }
 
 async function fetchStatus() {
-    if (!isConnected) return;
+    console.log("SEEEND");
 
     try {
         const response = await fetch(`${backendUrl}/api/status`, { method: 'GET' });
@@ -308,14 +432,14 @@ async function fetchStatus() {
             if (!result.data.is_connected) {
                 console.warn("Backend reports vehicle disconnected.");
                 setUIConnected(false);
-                updateStatus("Connection lost (reported by backend)", true);
+                //updateStatus("Connection lost (reported by backend)", true);
             }
         } else {
-            updateStatus(`Error fetching status: ${result.message}`, true);
+            //updateStatus(`Error fetching status: ${result.message}`, true);
         }
     } catch (error) {
         console.error('Status Fetch Error:', error);
-        updateStatus(`Status Fetch Error: ${error.message}`, true);
+        //updateStatus(`Status Fetch Error: ${error.message}`, true);
         // If fetching fails, you might want to stop polling or indicate stale data
         // clearInterval(statusInterval); statusInterval = null; // Example: stop polling on error
     }
@@ -325,6 +449,7 @@ async function fetchStatus() {
 connectButton.addEventListener('click', connectToDrone);
 disconnectButton.addEventListener('click', disconnectFromDrone);
 statusButton.addEventListener('click', fetchStatus); // Manual status fetch
+takeoffButton.addEventListener('click', sendTakeOff); // Manual status fetch
 
 // --- Initialization ---
 // Ensure map is initialized after the DOM is ready

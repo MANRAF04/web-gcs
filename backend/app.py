@@ -67,7 +67,7 @@ def create_circle_mission(center_lat, center_lon, altitude, radius=50):
     Commands the vehicle to fly a circle using simple_goto for each waypoint.
     Note: This is a blocking function. For long missions, run in a separate thread.
     """
-    if not vehicle or not vehicle.is_connected:
+    if not vehicle:
         logging.error("Vehicle not connected, cannot run mission.")
         raise Exception("Vehicle not connected") # Raise exception to be caught by endpoint
 
@@ -78,7 +78,6 @@ def create_circle_mission(center_lat, center_lon, altitude, radius=50):
         # Wait for mode change
         start_time = time.time()
         while vehicle.mode.name != "GUIDED":
-            if not vehicle.is_connected: raise Exception("Vehicle disconnected during mode change")
             if time.time() - start_time > 10: raise TimeoutError("Timeout setting GUIDED mode")
             time.sleep(0.5)
         logging.info("Mode set to GUIDED.")
@@ -106,7 +105,7 @@ def create_circle_mission(center_lat, center_lon, altitude, radius=50):
         timeout_waypoint = 60 # Timeout per waypoint
 
         while True:
-            if not vehicle or not vehicle.is_connected:
+            if not vehicle:
                  logging.error("Vehicle disconnected during mission.")
                  raise Exception("Vehicle disconnected during mission")
 
@@ -145,7 +144,7 @@ def connect_drone():
     global connection_string
 
     # Prevent reconnecting if already connected
-    if vehicle and vehicle.is_connected:
+    if vehicle:
          logging.info("Already connected.")
          return jsonify({"status": "success", "message": "Already connected"})
 
@@ -289,44 +288,26 @@ def takeoff():
             logging.warning("Takeoff request failed: Missing 'altitude' in request.")
             return jsonify({"status": "error", "message": "Missing 'altitude' in request body"}), 400
 
-        try:
-            target_altitude = float(data['altitude'])
-            # Add reasonable checks for altitude
-            if target_altitude <= 0:
-                raise ValueError("Altitude must be positive")
-            if target_altitude > 500: # Example: Set a max takeoff altitude for safety
-                 logging.warning(f"Takeoff altitude {target_altitude}m exceeds limit (500m).")
-                 # Decide whether to cap it or reject it
-                 # raise ValueError("Altitude exceeds safety limit")
-                 # Or cap it: target_altitude = 500
-        except (ValueError, TypeError):
-            logging.warning(f"Takeoff request failed: Invalid altitude value '{data.get('altitude')}'.")
-            return jsonify({"status": "error", "message": "Invalid 'altitude' value. Must be a positive number."}), 400
+        target_altitude = float(data['altitude'])
+        vehicle.mode = VehicleMode("GUIDED")
+        time.sleep(1)
+        vehicle.armed = True
 
-        logging.info(f"Takeoff requested to {target_altitude}m")
-
-                # 3. Check/Set Mode to GUIDED (required for simple_takeoff)
-        logging.info(f"Current Mode: {vehicle.mode.name}")
-        if vehicle.mode.name != "GUIDED":  # <--- CHECKING MODE
-            logging.info("Vehicle not in GUIDED mode. Attempting to set GUIDED mode...")
-            vehicle.mode = VehicleMode("GUIDED")
-        else:
-             logging.info("Vehicle already in GUIDED mode.")
-
-        if not vehicle.is_armable: # <--- CHECKING ARMABILITY
-            status_msg = f"Vehicle not armable (System Status: {vehicle.system_status.state}). Check GPS, EKF, safety switch etc."
-            logging.error(f"Takeoff failed: {status_msg}")
-            return jsonify({"status": "error", "message": status_msg}), 400
-
-        logging.info(f"Current Armed status: {vehicle.armed}")
-        if not vehicle.armed: # <--- CHECKING IF ALREADY ARMED
-            logging.info("Vehicle is armable but not armed. Attempting to arm...")
-            vehicle.armed = True # <--- ARMING AUTOMATICALLY
-        else:
-            logging.info("Vehicle already armed.")
-
+        while not vehicle.armed:      
+            print(" Waiting for arming...")
+            time.sleep(1)
+        
         logging.info(f"Commanding takeoff to {target_altitude}m...")
         vehicle.simple_takeoff(target_altitude)
+
+        logging.info("Takeoff completed.")
+        return jsonify({
+            "status": "success", 
+            "message": f"Takeoff to {target_altitude}m initiated",
+            "details": {
+                "altitude": target_altitude
+            }
+        })
 
     except APIException as e:
         # Catch specific DroneKit errors during the process

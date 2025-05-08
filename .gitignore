@@ -18,3 +18,7 @@ yarn-error.log*
 .env
 *.env.*
 .vscode/
+
+# Ardupilot / MAVLink stuff
+mav.*
+*.bin
